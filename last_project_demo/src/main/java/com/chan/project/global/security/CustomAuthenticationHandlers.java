@@ -1,0 +1,36 @@
+package com.chan.project.global.security;
+
+import lombok.RequiredArgsConstructor;
+import org.springframework.security.web.authentication.AuthenticationSuccessHandler;
+import org.springframework.stereotype.Component;
+import com.chan.project.global.redis.RedisRepository;
+import com.chan.project.global.security.jwt.JwtContents;
+import com.chan.project.global.security.jwt.JwtUtil;
+import com.chan.project.global.util.CookieUtil;
+
+import java.time.Duration;
+
+import static com.chan.project.global.security.jwt.JwtContents.*;
+
+@Component
+@RequiredArgsConstructor
+public class CustomAuthenticationHandlers {
+
+    private final JwtUtil jwtUtil;
+    private final RedisRepository redisRepository;
+
+    public AuthenticationSuccessHandler oauthSuccessHandler() {
+        return (request, response, authentication) -> {
+            CustomOAuth2User user = (CustomOAuth2User) authentication.getPrincipal();
+            String email = user.getEmail();
+            String role = user.getRole();
+            Long memberId = user.getMemberId();
+
+            String refreshToken = jwtUtil.createJwt(TOKEN_TYPE_REFRESH, email, role, memberId, REFRESH_TOKEN_EXPIRE_MILLIS);
+            redisRepository.setValue(refreshToken, "value", Duration.ofSeconds(JwtContents.REFRESH_TOKEN_EXPIRE_SECONDS));
+
+            response.addCookie(CookieUtil.createCookie(TOKEN_TYPE_REFRESH, refreshToken, REFRESH_COOKIE_PATH, REFRESH_TOKEN_EXPIRE_SECONDS));
+            response.sendRedirect("http://localhost:3000/auth/oauth/success");
+        };
+    }
+}
